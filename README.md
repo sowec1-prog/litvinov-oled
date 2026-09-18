@@ -12,15 +12,26 @@ Autonomní hokejový panel pro **ESP32-C3 SuperMini** a OLED SSD1306 128×64. Fi
 - první přijatý gól po restartu animaci ani zvuk nespustí;
 - konečný výsledek se na cloudovém API drží pět minut jako `ZAPAS SKONCIL`.
 
+## Použitý hardware
+
+- **ESP32-C3 SuperMini** — ESP32-C3, 4 MB flash, Wi-Fi 2,4 GHz; projekt používá PlatformIO profil `esp32-c3-devkitm-1`.
+- **OLED SSD1306 128 × 64 px**, I²C, adresa `0x3C`.
+- **Pasivní piezo bzučák** ověřený pro PWM tóny.
+- USB datový kabel pro napájení a nahrání firmwaru.
+- Propojovací vodiče: 4× pro OLED, 2× pro bzučák.
+
 ## Zapojení
 
-| ESP32-C3 SuperMini | Modul |
-|---|---|
-| GPIO8 | OLED SDA |
-| GPIO9 | OLED SCL |
-| 3V3 | OLED VCC |
-| GND | OLED GND a druhý vodič piezo bzučáku |
-| GPIO4 | signál pasivního piezo bzučáku |
+Všechny moduly musí mít společnou zem (**GND**). OLED i GPIO ESP32-C3 jsou 3,3 V logika; OLED proto napájejte z pinu **3V3**, ne z 5 V.
+
+| ESP32-C3 SuperMini | Připojit na | Poznámka |
+|---|---|---|
+| GPIO8 | OLED SDA | I²C data |
+| GPIO9 | OLED SCL | I²C hodiny |
+| 3V3 | OLED VCC | napájení OLED |
+| GND | OLED GND | společná zem |
+| GPIO4 | piezo `+` / signál | PWM znělka |
+| GND | piezo `-` | společná zem |
 
 OLED používá I²C adresu `0x3C`.
 
