@@ -1,7 +1,9 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <WiFi.h>
-#include <WiFiMulti.h>
+#include <WebServer.h>
+#include <DNSServer.h>
+#include <Preferences.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
@@ -39,10 +41,23 @@ static constexpr uint32_t WIFI_RETRY_MS = 15000;
 static constexpr uint32_t POLL_MS = 30000;
 // Pri live zapase kontrolujeme data casteji, ale OLED se prekresli jen pri zmene.
 static constexpr uint32_t LIVE_POLL_MS = 5000;
+// Když se uložené sítě nepřipojí, vznikne lokální konfigurační AP.
+// ESP32-C3 při skenu vrací pouze 2,4GHz sítě, takže zde nelze omylem vybrat 5 GHz.
+static constexpr uint32_t SETUP_PORTAL_DELAY_MS = 45000;
+static constexpr char SETUP_AP_SSID[] = "Litvinov-OLED-Setup";
+static constexpr char SETUP_AP_PASSWORD[] = "litvinov";
+static constexpr byte DNS_PORT = 53;
 
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
-WiFiMulti wifiMulti;
+WebServer setupServer(80);
+DNSServer setupDns;
+Preferences preferences;
 bool wifiNetworksConfigured = false;
+String setupSavedSsid;
+String setupSavedPassword;
+uint8_t wifiAttemptIndex = 0;
+bool setupPortalActive = false;
+uint32_t wifiConnectStarted = 0;
 uint32_t lastWifiAttempt = 0;
 uint32_t lastPoll = 0;
 bool liveMode = false;
@@ -244,17 +259,109 @@ void refreshCountdown() {
   }
 }
 
+void htmlOption(String &page, const String &ssid) {
+  String escaped = ssid;
+  escaped.replace("&", "&amp;");
+  escaped.replace("<", "&lt;");
+  escaped.replace(">", "&gt;");
+  escaped.replace("\"", "&quot;");
+  page += "<option value=\"" + escaped + "\">" + escaped + "</option>";
+}
+
+void showSetupPage() {
+  const int count = WiFi.scanNetworks(false, true);
+  String page = "<!doctype html><meta name=viewport content='width=device-width,initial-scale=1'>"
+                "<title>Litvinov OLED Wi-Fi</title><style>body{font-family:sans-serif;max-width:32rem;margin:2rem auto;padding:0 1rem}input,select,button{box-sizing:border-box;width:100%;font-size:1rem;padding:.7rem;margin:.4rem 0}button{background:#bd0000;color:white;border:0;border-radius:.3rem}</style>"
+                "<h2>Litvinov OLED - Wi-Fi</h2><p>Jsou zde jen site 2,4 GHz, ktere ESP32-C3 umi pouzit.</p>"
+                "<form method=post action=/save><label>Wi-Fi sit</label><select name=ssid required>";
+  if (count <= 0) page += "<option value=''>Zadna sit nenalezena - obnov stranku</option>";
+  for (int i = 0; i < count; ++i) htmlOption(page, WiFi.SSID(i));
+  page += "</select><label>Heslo Wi-Fi</label><input name=pass type=password autocomplete=current-password required>"
+          "<button type=submit>Ulozit a pripojit</button></form><p>Po ulozeni se OLED sam pripoji a tento hotspot zmizi.</p>";
+  setupServer.send(200, "text/html; charset=utf-8", page);
+}
+
+void saveSetupWifi() {
+  const String ssid = setupServer.arg("ssid");
+  const String password = setupServer.arg("pass");
+  if (ssid.isEmpty() || password.isEmpty()) {
+    setupServer.send(400, "text/plain; charset=utf-8", "Chybi nazev site nebo heslo.");
+    return;
+  }
+  preferences.begin("wifi", false);
+  preferences.putString("setup_ssid", ssid);
+  preferences.putString("setup_pass", password);
+  preferences.end();
+  setupServer.send(200, "text/html; charset=utf-8", "<meta name=viewport content='width=device-width'><h2>Overuji pripojeni OLED...</h2><p>Vyckej asi pul minuty. Po uspechu hotspot zmizi.</p>");
+  WiFi.begin(ssid.c_str(), password.c_str());
+  screen("OVERUJI WIFI", "VYBRANA 2.4G SIT");
+  wifiConnectStarted = millis();
+}
+
+void startSetupPortal() {
+  if (setupPortalActive) return;
+  WiFi.mode(WIFI_AP_STA);
+  WiFi.softAP(SETUP_AP_SSID, SETUP_AP_PASSWORD);
+  setupDns.start(DNS_PORT, "*", WiFi.softAPIP());
+  setupServer.on("/", HTTP_GET, showSetupPage);
+  setupServer.on("/save", HTTP_POST, saveSetupWifi);
+  setupServer.on("/generate_204", HTTP_GET, showSetupPage);
+  setupServer.onNotFound(showSetupPage);
+  setupServer.begin();
+  setupPortalActive = true;
+  screen("NASTAVENI WIFI", SETUP_AP_SSID, "HESLO: litvinov", "192.168.4.1");
+  Serial.println("WIFI_SETUP_PORTAL_ACTIVE");
+}
+
+void stopSetupPortal() {
+  if (!setupPortalActive) return;
+  setupDns.stop();
+  setupServer.stop();
+  WiFi.softAPdisconnect(true);
+  WiFi.mode(WIFI_STA);
+  setupPortalActive = false;
+}
+
 void configureWifiNetworks() {
   if (wifiNetworksConfigured) return;
-  wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
-  if (WIFI_SSID_2[0] != '\0') wifiMulti.addAP(WIFI_SSID_2, WIFI_PASSWORD_2);
-  if (WIFI_SSID_3[0] != '\0') wifiMulti.addAP(WIFI_SSID_3, WIFI_PASSWORD_3);
+  // Hesla jsou v secrets.h nebo NVS; nevypisujeme je ani názvy sítí do sériového logu.
+  preferences.begin("wifi", false);
+  setupSavedSsid = preferences.isKey("setup_ssid") ? preferences.getString("setup_ssid") : "";
+  setupSavedPassword = preferences.isKey("setup_pass") ? preferences.getString("setup_pass") : "";
+  preferences.end();
   wifiNetworksConfigured = true;
 }
 
+bool beginStoredWifi(uint8_t slot) {
+  const char* ssid = "";
+  const char* password = "";
+  switch (slot) {
+    case 0: ssid = WIFI_SSID; password = WIFI_PASSWORD; break;
+    case 1: ssid = WIFI_SSID_2; password = WIFI_PASSWORD_2; break;
+    case 2: ssid = WIFI_SSID_3; password = WIFI_PASSWORD_3; break;
+    case 3:
+      if (!setupSavedSsid.isEmpty() && !setupSavedPassword.isEmpty()) {
+        WiFi.begin(setupSavedSsid.c_str(), setupSavedPassword.c_str());
+        return true;
+      }
+      return false;
+    default: return false;
+  }
+  if (ssid[0] == '\0') return false;
+  WiFi.begin(ssid, password);
+  return true;
+}
+
 void startWifi() {
+  if (setupPortalActive) return;
   screen("PRIPOJUJI WIFI", "ULOZENE SITE");
-  wifiMulti.run();
+  // WiFi.begin je neblokující. Každých 15 s zkusíme další uloženou síť,
+  // takže konfigurační hotspot vznikne spolehlivě po 45 s.
+  for (uint8_t checked = 0; checked < 4; ++checked) {
+    const uint8_t slot = wifiAttemptIndex++ % 4;
+    if (beginStoredWifi(slot)) break;
+  }
+  if (wifiConnectStarted == 0) wifiConnectStarted = millis();
   lastWifiAttempt = millis();
 }
 
@@ -385,10 +492,23 @@ void setup() {
 void loop() {
   if (WiFi.status() != WL_CONNECTED) {
     wifiWasConnected = false;
+    if (setupPortalActive) {
+      setupDns.processNextRequest();
+      setupServer.handleClient();
+      delay(10);
+      return;
+    }
+    if (wifiConnectStarted != 0 && millis() - wifiConnectStarted >= SETUP_PORTAL_DELAY_MS) {
+      startSetupPortal();
+      return;
+    }
     if (millis() - lastWifiAttempt >= WIFI_RETRY_MS) startWifi();
     delay(100);
     return;
   }
+
+  stopSetupPortal();
+  wifiConnectStarted = 0;
 
   if (!wifiWasConnected) {
     wifiWasConnected = true;

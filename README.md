@@ -40,7 +40,9 @@ OLED používá I²C adresu `0x3C`.
 1. Zkopírujte `include/secrets.h.example` jako `include/secrets.h`.
 2. Doplňte primární SSID/heslo a případně `WIFI_SSID_2` / `WIFI_PASSWORD_2` a `WIFI_SSID_3` / `WIFI_PASSWORD_3` pro další místa.
 3. ESP32-C3 vybere první dostupnou uloženou 2,4GHz síť; po návratu domů se automaticky připojí k domácí Wi-Fi.
-4. Soubor `include/secrets.h` nikdy necommitujte; `.gitignore` jej vylučuje.
+4. Pokud se žádná uložená síť nepřipojí do 45 sekund, OLED vytvoří zabezpečený hotspot **`Litvinov-OLED-Setup`** s heslem **`litvinov`**. Připojte se k němu telefonem, otevřete `http://192.168.4.1`, vyberte nalezenou síť a zadejte její heslo. Seznam obsahuje pouze 2,4GHz sítě kompatibilní s ESP32-C3.
+5. Po úspěšném připojení hotspot zmizí; nově vybraná síť se uloží do paměti ESP spolu s dříve zadanými sítěmi.
+6. Soubor `include/secrets.h` nikdy necommitujte; `.gitignore` jej vylučuje.
 
 ## Sestavení a nahrání
 
