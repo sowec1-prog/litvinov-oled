@@ -38,8 +38,9 @@ OLED používá I²C adresu `0x3C`.
 ## Nastavení Wi-Fi
 
 1. Zkopírujte `include/secrets.h.example` jako `include/secrets.h`.
-2. Doplňte SSID a heslo.
-3. Soubor `include/secrets.h` nikdy necommitujte; `.gitignore` jej vylučuje.
+2. Doplňte primární SSID/heslo a případně `WIFI_SSID_2` / `WIFI_PASSWORD_2` a `WIFI_SSID_3` / `WIFI_PASSWORD_3` pro další místa.
+3. ESP32-C3 vybere první dostupnou uloženou 2,4GHz síť; po návratu domů se automaticky připojí k domácí Wi-Fi.
+4. Soubor `include/secrets.h` nikdy necommitujte; `.gitignore` jej vylučuje.
 
 ## Sestavení a nahrání
 
