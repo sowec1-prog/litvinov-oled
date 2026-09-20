@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <Wire.h>
 #include <WiFi.h>
+#include <WiFiMulti.h>
 #include <HTTPClient.h>
 #include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
@@ -8,6 +9,21 @@
 #include <Adafruit_SSD1306.h>
 #include "esp_wifi.h"
 #include "secrets.h"
+
+// Druha sit je volitelna. Stary lokalni secrets.h bez techto maker zustava
+// kompatibilni; po doplneni se ESP pripoji k prvni dostupne ulozene siti.
+#ifndef WIFI_SSID_2
+#define WIFI_SSID_2 ""
+#endif
+#ifndef WIFI_PASSWORD_2
+#define WIFI_PASSWORD_2 ""
+#endif
+#ifndef WIFI_SSID_3
+#define WIFI_SSID_3 ""
+#endif
+#ifndef WIFI_PASSWORD_3
+#define WIFI_PASSWORD_3 ""
+#endif
 
 // ESP32-C3 SuperMini + OLED SSD1306: SDA=GPIO8, SCL=GPIO9.
 static constexpr uint8_t OLED_SDA = 8;
@@ -25,6 +41,8 @@ static constexpr uint32_t POLL_MS = 30000;
 static constexpr uint32_t LIVE_POLL_MS = 5000;
 
 Adafruit_SSD1306 oled(128, 64, &Wire, -1);
+WiFiMulti wifiMulti;
+bool wifiNetworksConfigured = false;
 uint32_t lastWifiAttempt = 0;
 uint32_t lastPoll = 0;
 bool liveMode = false;
@@ -185,6 +203,18 @@ void screenLive(const String &homeCode, const String &awayCode, int homeScore, i
   oled.display();
 }
 
+void screenFinished(const String &homeCode, const String &awayCode, int homeScore, int awayScore) {
+  // Na 128x64 OLED se dlouhé „ZAPAS SKONCIL“ nevejde na jeden řádek
+  // ve velikosti 2. Rozdělíme jej na dva řádky; vše podstatné je 2× větší.
+  oled.clearDisplay();
+  oled.setTextColor(SSD1306_WHITE);
+  printCentered(homeCode + "-" + awayCode, 0, 2);
+  printCentered(String(homeScore) + ":" + String(awayScore), 16, 2);
+  printCentered("ZAPAS", 32, 2);
+  printCentered("SKONCIL", 48, 2);
+  oled.display();
+}
+
 void screenFixture(const String &home, const String &away, const String &bottom, uint8_t bottomSize) {
   // Puvodni vzhled: domaci tym / proti / hoste. Odpočet je pridany pod ne.
   oled.clearDisplay();
@@ -214,9 +244,17 @@ void refreshCountdown() {
   }
 }
 
+void configureWifiNetworks() {
+  if (wifiNetworksConfigured) return;
+  wifiMulti.addAP(WIFI_SSID, WIFI_PASSWORD);
+  if (WIFI_SSID_2[0] != '\0') wifiMulti.addAP(WIFI_SSID_2, WIFI_PASSWORD_2);
+  if (WIFI_SSID_3[0] != '\0') wifiMulti.addAP(WIFI_SSID_3, WIFI_PASSWORD_3);
+  wifiNetworksConfigured = true;
+}
+
 void startWifi() {
-  screen("PRIPOJUJI WIFI", WIFI_SSID);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  screen("PRIPOJUJI WIFI", "ULOZENE SITE");
+  wifiMulti.run();
   lastWifiAttempt = millis();
 }
 
@@ -319,7 +357,7 @@ bool fetchAndDisplayMatch() {
     const String score = String((int)(doc["score_home"] | 0)) + ":" + String((int)(doc["score_away"] | 0));
     const String displayKey = String("finished|") + String(doc["match_id"] | "") + "|" + home + "|" + away + "|" + score;
     if (displayKey != lastRenderedPayloadKey) {
-      screen(home + " - " + away, score, "ZAPAS SKONCIL");
+      screenFinished(home, away, (int)(doc["score_home"] | 0), (int)(doc["score_away"] | 0));
       lastRenderedPayloadKey = displayKey;
     }
   }
@@ -340,6 +378,7 @@ void setup() {
   WiFi.setAutoReconnect(true);
   wifi_country_t country = {"CZ", 1, 13, WIFI_COUNTRY_POLICY_MANUAL};
   esp_wifi_set_country(&country);
+  configureWifiNetworks();
   startWifi();
 }
 
