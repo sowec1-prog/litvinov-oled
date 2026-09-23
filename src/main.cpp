@@ -12,6 +12,7 @@
 #include <Adafruit_SH110X.h>
 #include "esp_wifi.h"
 #include "esp_log.h"
+#include "hcverva_logo.h"
 #include "secrets.h"
 
 // Druha sit je volitelna. Stary lokalni secrets.h bez techto maker zustava
@@ -259,6 +260,14 @@ void screen(const String &a, const String &b = "", const String &c = "", const S
   presentOled();
 }
 
+void screenVervaLogo() {
+  // Při připojování nevypisujeme technické Wi-Fi hlášky; zůstane čistý klubový znak.
+  oled.clearDisplay();
+  oled.drawBitmap((128 - HC_VERVA_LOGO_WIDTH) / 2, WIFI_BAR_HEIGHT + 1,
+                  HC_VERVA_LOGO, HC_VERVA_LOGO_WIDTH, HC_VERVA_LOGO_HEIGHT, SH110X_WHITE);
+  presentOled();
+}
+
 String normalizeDate(String dateTime) {
   String time = dateTime.length() >= 5 ? dateTime.substring(dateTime.length() - 5) : "--:--";
   String date = dateTime.length() > 6 ? dateTime.substring(0, dateTime.length() - 6) : dateTime;
@@ -472,7 +481,7 @@ void diagnosePrimaryWifiScan() {
 void startWifi() {
   // I při aktivním portálu zůstává stanice v režimu AP+STA a smí opakovat
   // uložené připojení. Portál skončí až po skutečném WL_CONNECTED.
-  if (!setupPortalActive) screen("PRIPOJUJI WIFI", "ULOZENE SITE");
+  if (!setupPortalActive) screenVervaLogo();
   ESP_LOGI("LIT", "WIFI_CONNECT_CYCLE");
   Serial.println("WIFI_CONNECT_CYCLE");
   // WiFi.begin je neblokující. Slabému Vodafone-2g dáme tři pokusy,
