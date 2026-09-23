@@ -327,11 +327,12 @@ void screenFixture(const String &home, const String &away, const String &bottom,
 }
 
 void screenBigScheduled(const String &home, const String &away, const String &dateTime) {
-  screenFixture("", away, normalizeDate(dateTime), 1);
+  // Pořadí v liště není název klubu; pro soupeře musí zůstat vidět oba týmy.
+  screenFixture(home, away, normalizeDate(dateTime), 1);
 }
 
 void screenCountdown(uint32_t remaining) {
-  screenFixture("", scheduledAway, formatCountdown(remaining), 2);
+  screenFixture(scheduledHome, scheduledAway, formatCountdown(remaining), 2);
 }
 
 void refreshCountdown() {
