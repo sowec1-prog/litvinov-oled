@@ -108,10 +108,6 @@ const BuzzerNote CONCEDED_GOAL_TUNE[] = {
   {370, 16}, {494, 4}, {440, 4}, {494, 4}, {554, 16},
   {BUZZER_REST, 16}, {440, 16}, {554, 4}, {494, 4}, {440, 4}, {370, 16},
 };
-// Krátký ověřovací tón po restartu: potvrzuje zapojení GPIO4 → bzučák → GND.
-const BuzzerNote BUZZER_BOOT_TEST_TUNE[] = {
-  {880, 2}, {BUZZER_REST, 1}, {1320, 2},
-};
 
 void playBuzzerTune(const BuzzerNote* tune, size_t count) {
   for (size_t i = 0; i < count; ++i) {
@@ -629,9 +625,6 @@ void setup() {
   ledcSetup(BUZZER_CHANNEL, 2000, 8);
   ledcAttachPin(BUZZER_PIN, BUZZER_CHANNEL);
   ledcWriteTone(BUZZER_CHANNEL, 0);
-  Serial.println("BUZZER_BOOT_TEST");
-  playBuzzerTune(BUZZER_BOOT_TEST_TUNE, sizeof(BUZZER_BOOT_TEST_TUNE) / sizeof(BUZZER_BOOT_TEST_TUNE[0]));
-  Serial.println("BUZZER_BOOT_TEST_DONE");
   Serial.println("BOOT_I2C_START");
   Wire.begin(OLED_SDA, OLED_SCL);
   Serial.println("BOOT_OLED_START");
