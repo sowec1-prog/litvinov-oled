@@ -127,7 +127,8 @@ void playBuzzerTune(const BuzzerNote* tune, size_t count) {
 
 // Litvínovský gól: GOOL jede zprava doleva v prvním řádku pod trvalou lištou.
 // Při každém průjezdu přibývají písmena postupně: G → GO → GOO → GOOL.
-void playLitGoalAnimation() {
+// Tóny se plánují podle millis(), takže bzučák a animace běží současně.
+void playLitGoalAnimation(const BuzzerNote* tune, size_t tuneCount) {
   static constexpr uint32_t GOAL_ANIMATION_MS = 30000;
   static constexpr uint16_t FRAME_MS = 70;
   static constexpr uint16_t PASS_MS = 2800;
@@ -141,9 +142,26 @@ void playLitGoalAnimation() {
   oled.setTextSize(textSize);
   oled.getTextBounds(fullMessage, 0, 0, &x1, &y1, &fullTextWidth, &textHeight);
   const uint32_t started = millis();
+  size_t noteIndex = 0;
+  uint32_t nextNoteAt = 0;
+  uint32_t toneUntil = 0;
+  uint16_t currentHz = BUZZER_REST;
+  oled.setTextWrap(false);  // Text mimo pravý okraj nesmí přeskočit do druhého řádku.
 
   while (millis() - started < GOAL_ANIMATION_MS) {
-    const uint32_t passElapsed = (millis() - started) % PASS_MS;
+    const uint32_t elapsed = millis() - started;
+    while (noteIndex < tuneCount && elapsed >= nextNoteAt) {
+      const BuzzerNote& note = tune[noteIndex++];
+      const uint16_t duration = (BUZZER_QUARTER_MS * note.sixteenths) / 4;
+      currentHz = note.hz;
+      toneUntil = nextNoteAt + (note.hz == BUZZER_REST
+          ? 0 : duration - (duration * BUZZER_GAP_PERCENT / 100));
+      nextNoteAt += duration;
+    }
+    ledcWriteTone(BUZZER_CHANNEL,
+        currentHz != BUZZER_REST && elapsed < toneUntil ? currentHz : 0);
+
+    const uint32_t passElapsed = elapsed % PASS_MS;
     const uint8_t letterCount = min<uint8_t>(fullMessage.length(), 1 + passElapsed / LETTER_STEP_MS);
     const String message = fullMessage.substring(0, letterCount);
     const int16_t x = 128 - ((128 + fullTextWidth) * passElapsed / PASS_MS);
@@ -156,6 +174,8 @@ void playLitGoalAnimation() {
     presentOled();
     delay(FRAME_MS);
   }
+  ledcWriteTone(BUZZER_CHANNEL, 0);
+  oled.setTextWrap(true);
 }
 
 bool handleAudioCue(const String& eventId, const String& cue) {
@@ -170,8 +190,7 @@ bool handleAudioCue(const String& eventId, const String& cue) {
   previousAudioEventId = eventId;
   if (cue == "lit_goal") {
     Serial.println("CLOUD_AUDIO=lit_goal");
-    playBuzzerTune(LIT_GOAL_TUNE, sizeof(LIT_GOAL_TUNE) / sizeof(LIT_GOAL_TUNE[0]));
-    playLitGoalAnimation();
+    playLitGoalAnimation(LIT_GOAL_TUNE, sizeof(LIT_GOAL_TUNE) / sizeof(LIT_GOAL_TUNE[0]));
     return true;  // Obnovime aktualni live obrazovku hned po animaci.
   } else if (cue == "conceded_goal") {
     Serial.println("CLOUD_AUDIO=conceded_goal");
