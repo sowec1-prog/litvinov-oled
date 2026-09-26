@@ -125,30 +125,34 @@ void playBuzzerTune(const BuzzerNote* tune, size_t count) {
   }
 }
 
-// Litvinovsky gol: blikajici GOOL jede jednou zprava doleva po dobu 30 sekund.
+// Litvínovský gól: GOOL jede zprava doleva v prvním řádku pod trvalou lištou.
+// Při každém průjezdu přibývají písmena postupně: G → GO → GOO → GOOL.
 void playLitGoalAnimation() {
   static constexpr uint32_t GOAL_ANIMATION_MS = 30000;
   static constexpr uint16_t FRAME_MS = 70;
-  const String message = "GOOL";
+  static constexpr uint16_t PASS_MS = 2800;
+  static constexpr uint16_t LETTER_STEP_MS = 350;
+  // Horní lišta má 8 px; první řádek obsahu začíná hned pod ní.
+  static constexpr int16_t GOAL_TEXT_Y = 9;
+  const String fullMessage = "GOOL";
   const uint8_t textSize = 4;
   int16_t x1, y1;
-  uint16_t textWidth, textHeight;
+  uint16_t fullTextWidth, textHeight;
   oled.setTextSize(textSize);
-  oled.getTextBounds(message, 0, 0, &x1, &y1, &textWidth, &textHeight);
+  oled.getTextBounds(fullMessage, 0, 0, &x1, &y1, &fullTextWidth, &textHeight);
   const uint32_t started = millis();
 
   while (millis() - started < GOAL_ANIMATION_MS) {
-    const uint32_t elapsed = millis() - started;
-    const int16_t x = 128 - ((128 + textWidth) * elapsed / GOAL_ANIMATION_MS);
-    const bool visible = ((elapsed / 280) % 2) == 0;
+    const uint32_t passElapsed = (millis() - started) % PASS_MS;
+    const uint8_t letterCount = min<uint8_t>(fullMessage.length(), 1 + passElapsed / LETTER_STEP_MS);
+    const String message = fullMessage.substring(0, letterCount);
+    const int16_t x = 128 - ((128 + fullTextWidth) * passElapsed / PASS_MS);
 
     oled.clearDisplay();
-    if (visible) {
-      oled.setTextColor(SH110X_WHITE);
-      oled.setTextSize(textSize);
-      oled.setCursor(x, (64 - textHeight) / 2);
-      oled.print(message);
-    }
+    oled.setTextColor(SH110X_WHITE);
+    oled.setTextSize(textSize);
+    oled.setCursor(x, GOAL_TEXT_Y);
+    oled.print(message);
     presentOled();
     delay(FRAME_MS);
   }
