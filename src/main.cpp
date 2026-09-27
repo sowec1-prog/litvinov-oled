@@ -103,10 +103,10 @@ const BuzzerNote LIT_GOAL_TUNE[] = {
   {370, 16}, {494, 4}, {415, 4}, {494, 4}, {554, 16},
   {BUZZER_REST, 16}, {415, 16}, {554, 4}, {466, 4}, {554, 4}, {494, 16},
 };
-// Inkasovaný gól — stejná délka a rytmus, smutnější F# moll.
+// Inkasovaný gól — samostatný pomalý sestupný motiv, zřetelně jiný než oslavná znělka.
 const BuzzerNote CONCEDED_GOAL_TUNE[] = {
-  {370, 16}, {494, 4}, {440, 4}, {494, 4}, {554, 16},
-  {BUZZER_REST, 16}, {440, 16}, {554, 4}, {494, 4}, {440, 4}, {370, 16},
+  {523, 4}, {466, 4}, {415, 4}, {370, 8},
+  {BUZZER_REST, 4}, {370, 4}, {311, 4}, {277, 12},
 };
 
 void playBuzzerTune(const BuzzerNote* tune, size_t count) {
