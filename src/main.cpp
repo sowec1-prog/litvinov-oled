@@ -76,6 +76,12 @@ uint32_t serverEpochMillis = 0;
 uint8_t tablePosition = 0;  // 1–14, získáno z tabulky extraligy.
 String scheduledHome;
 String scheduledAway;
+String scheduledGameClock;
+// Mimo live zápas se střídá nejbližší termín a klubové logo po 10 minutách.
+static constexpr uint32_t SCHEDULED_PAGE_MS = 10UL * 60UL * 1000UL;
+bool scheduledRotationActive = false;
+bool scheduledShowingLogo = false;
+uint32_t scheduledRotationStarted = 0;
 uint32_t shownCountdownSecond = UINT32_MAX;
 
 // ESP si pamatuje jen poslední cloudový event, aby znělku nezopakoval při dalším pollu.
@@ -354,8 +360,36 @@ void screenCountdown(uint32_t remaining) {
   screenFixture(scheduledHome, scheduledAway, formatCountdown(remaining), 2);
 }
 
+bool shouldShowScheduledLogo() {
+  if (!scheduledRotationActive) return false;
+  const uint32_t phase = (millis() - scheduledRotationStarted) / SCHEDULED_PAGE_MS;
+  return (phase % 2) == 1;
+}
+
+void refreshScheduledRotation(bool force = false) {
+  if (!scheduledRotationActive) return;
+  const bool showLogo = shouldShowScheduledLogo();
+  if (!force && showLogo == scheduledShowingLogo) return;
+
+  scheduledShowingLogo = showLogo;
+  shownCountdownSecond = UINT32_MAX;
+  if (showLogo) {
+    screenVervaLogo();
+    Serial.println("OLED_SCHEDULED_PAGE=logo");
+    return;
+  }
+
+  if (countdownActive && matchStartEpoch > serverEpoch) {
+    const uint32_t now = serverEpoch + (millis() - serverEpochMillis) / 1000;
+    screenCountdown(matchStartEpoch - now);
+  } else {
+    screenBigScheduled(scheduledHome, scheduledAway, scheduledGameClock);
+  }
+  Serial.println("OLED_SCHEDULED_PAGE=fixture");
+}
+
 void refreshCountdown() {
-  if (!countdownActive || matchStartEpoch == 0 || serverEpoch == 0) return;
+  if (!countdownActive || matchStartEpoch == 0 || serverEpoch == 0 || scheduledShowingLogo) return;
   const uint32_t now = serverEpoch + (millis() - serverEpochMillis) / 1000;
   const uint32_t remaining = matchStartEpoch > now ? matchStartEpoch - now : 0;
   if (remaining != shownCountdownSecond) {
@@ -572,25 +606,25 @@ bool fetchAndDisplayMatch() {
     previousAudioEventId = "";
     scheduledHome = homeDisplay;
     scheduledAway = awayDisplay;
+    scheduledGameClock = String(doc["game_clock"] | "Termin neznamy");
     matchStartEpoch = doc["match_start_epoch"] | 0;
     serverEpoch = doc["server_epoch"] | 0;
     serverEpochMillis = millis();
     countdownActive = doc["is_match_day"] | false;
-    const String scheduledIdentity = String(doc["match_id"] | "") + "|" + homeDisplay + "|" + awayDisplay + "|" + String(matchStartEpoch) + "|" + String(countdownActive);
+    const String scheduledIdentity = String(doc["match_id"] | "") + "|" + homeDisplay + "|" + awayDisplay + "|" + scheduledGameClock + "|" + String(matchStartEpoch) + "|" + String(countdownActive);
     const bool scheduleChanged = scheduledIdentity != lastScheduledIdentity;
     lastScheduledIdentity = scheduledIdentity;
-    if (scheduleChanged) shownCountdownSecond = UINT32_MAX;
-    if (countdownActive && matchStartEpoch > serverEpoch) {
-      refreshCountdown();
-    } else {
-      const String displayKey = String("scheduled|") + scheduledIdentity + "|" + String(doc["game_clock"] | "Termin neznamy");
-      if (displayKey != lastRenderedPayloadKey) {
-        screenBigScheduled(homeDisplay, awayDisplay, String(doc["game_clock"] | "Termin neznamy"));
-        lastRenderedPayloadKey = displayKey;
-      }
+    if (scheduleChanged || !scheduledRotationActive) {
+      scheduledRotationActive = true;
+      scheduledRotationStarted = millis();
+      scheduledShowingLogo = false;
+      shownCountdownSecond = UINT32_MAX;
     }
+    refreshScheduledRotation(scheduleChanged);
   } else if (state == "live") {
     liveMode = true;
+    scheduledRotationActive = false;
+    scheduledShowingLogo = false;
     countdownActive = false;
     const int scoreHome = doc["score_home"] | 0;
     const int scoreAway = doc["score_away"] | 0;
@@ -621,6 +655,8 @@ bool fetchAndDisplayMatch() {
     }
   } else {
     liveMode = false;
+    scheduledRotationActive = false;
+    scheduledShowingLogo = false;
     countdownActive = false;
     audioEventBaselineKnown = false;
     previousAudioEventId = "";
@@ -712,6 +748,8 @@ void loop() {
     lastPoll = 0; // Nacti zapas hned po zobrazeni uspesneho pripojeni.
   }
 
+  // Mimo live zápas střídáme po 10 minutách nejbližší termín a logo HC Verva.
+  refreshScheduledRotation();
   refreshCountdown();
 
   // U naplanovaneho zapasu je datum/cas uz pevny. Cloud znovu dotazeme az
