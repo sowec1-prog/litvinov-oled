@@ -13,6 +13,7 @@
 #include "esp_wifi.h"
 #include "esp_log.h"
 #include "hcverva_logo.h"
+#include "team_logos.h"
 #include "secrets.h"
 
 // Druha sit je volitelna. Stary lokalni secrets.h bez techto maker zustava
@@ -76,9 +77,11 @@ uint32_t serverEpochMillis = 0;
 uint8_t tablePosition = 0;  // 1–14, získáno z tabulky extraligy.
 String scheduledHome;
 String scheduledAway;
+String scheduledHomeCode;
+String scheduledAwayCode;
 String scheduledGameClock;
-// Mimo live zápas se střídá nejbližší termín a klubové logo po 10 minutách.
-static constexpr uint32_t SCHEDULED_PAGE_MS = 10UL * 60UL * 1000UL;
+// Mimo live zápas se střídá nejbližší termín a dvojice klubových znaků po 5 minutách.
+static constexpr uint32_t SCHEDULED_PAGE_MS = 5UL * 60UL * 1000UL;
 bool scheduledRotationActive = false;
 bool scheduledShowingLogo = false;
 uint32_t scheduledRotationStarted = 0;
@@ -285,11 +288,37 @@ void screen(const String &a, const String &b = "", const String &c = "", const S
   presentOled();
 }
 
+const uint8_t* teamLogoForCode(String code) {
+  code.toUpperCase();
+  if (code == "TRI") return LOGO_TRI;
+  if (code == "LIT") return LOGO_LIT;
+  if (code == "KLA") return LOGO_KLA;
+  if (code == "OLO") return LOGO_OLO;
+  if (code == "LIB") return LOGO_LIB;
+  if (code == "MHK") return LOGO_MHK;
+  if (code == "PLZ") return LOGO_PLZ;
+  if (code == "KOM") return LOGO_KOM;
+  if (code == "PCE") return LOGO_PCE;
+  if (code == "VIT") return LOGO_VIT;
+  return nullptr;
+}
+
 void screenVervaLogo() {
-  // Při připojování nevypisujeme technické Wi-Fi hlášky; zůstane čistý klubový znak.
+  // Startovní / síťová obrazovka zůstává klubový znak; dvojice znaků je jen ve scheduled cyklu.
   oled.clearDisplay();
   oled.drawBitmap((128 - HC_VERVA_LOGO_WIDTH) / 2, WIFI_BAR_HEIGHT + 1,
                   HC_VERVA_LOGO, HC_VERVA_LOGO_WIDTH, HC_VERVA_LOGO_HEIGHT, SH110X_WHITE);
+  presentOled();
+}
+
+void screenFixtureLogos(const String& homeCode, const String& awayCode) {
+  // Stránka střídající rozpis: pouze dva znaky, DOMA vlevo a HOSTÉ vpravo.
+  // Trvalá horní lišta zůstává zachovaná přes presentOled().
+  const uint8_t* homeLogo = teamLogoForCode(homeCode);
+  const uint8_t* awayLogo = teamLogoForCode(awayCode);
+  oled.clearDisplay();
+  if (homeLogo) oled.drawBitmap(10, WIFI_BAR_HEIGHT + 8, homeLogo, LOGO_W, LOGO_H, SH110X_WHITE);
+  if (awayLogo) oled.drawBitmap(78, WIFI_BAR_HEIGHT + 8, awayLogo, LOGO_W, LOGO_H, SH110X_WHITE);
   presentOled();
 }
 
@@ -374,8 +403,8 @@ void refreshScheduledRotation(bool force = false) {
   scheduledShowingLogo = showLogo;
   shownCountdownSecond = UINT32_MAX;
   if (showLogo) {
-    screenVervaLogo();
-    Serial.println("OLED_SCHEDULED_PAGE=logo");
+    screenFixtureLogos(scheduledHomeCode, scheduledAwayCode);
+    Serial.printf("OLED_SCHEDULED_PAGE=logos home=%s away=%s\n", scheduledHomeCode.c_str(), scheduledAwayCode.c_str());
     return;
   }
 
@@ -606,6 +635,8 @@ bool fetchAndDisplayMatch() {
     previousAudioEventId = "";
     scheduledHome = homeDisplay;
     scheduledAway = awayDisplay;
+    scheduledHomeCode = home;
+    scheduledAwayCode = away;
     scheduledGameClock = String(doc["game_clock"] | "Termin neznamy");
     matchStartEpoch = doc["match_start_epoch"] | 0;
     serverEpoch = doc["server_epoch"] | 0;
