@@ -35,6 +35,12 @@ Všechny moduly musí mít společnou zem (**GND**). OLED i GPIO ESP32-C3 jsou 3
 
 OLED používá I²C adresu `0x3C`.
 
+## Doporučené vylepšení Wi-Fi antény
+
+U ESP32-C3 SuperMini může mít jednoduchá úprava antény významný přínos pro slabší 2,4GHz signál. Pro Litvínov OLED byla prakticky ověřena rychlejší asociace k Wi-Fi a lepší RSSI po této úpravě. Postup a zkušenosti komunity: [ESP32-C3 SuperMini antenna mod](https://www.reddit.com/r/esp32/comments/1k01wtp/the_esp32c3_supermini_antenna_mod_is_the_real_deal/).
+
+Jde o fyzickou pájecí úpravu modulu: dělejte ji jen při odpojeném USB napájení a na vlastní odpovědnost.
+
 ## Nastavení Wi-Fi
 
 1. Zkopírujte `include/secrets.h.example` jako `include/secrets.h`.
