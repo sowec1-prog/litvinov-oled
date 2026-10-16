@@ -300,6 +300,11 @@ const uint8_t* teamLogoForCode(String code) {
   if (code == "KOM") return LOGO_KOM;
   if (code == "PCE") return LOGO_PCE;
   if (code == "VIT") return LOGO_VIT;
+  if (code == "SPA") return LOGO_SPA;
+  if (code == "MBL") return LOGO_MBL;
+  // Hokej.cz uses CEB in the schedule and MOT in some live payloads.
+  if (code == "CEB" || code == "MOT") return LOGO_CEB;
+  if (code == "KVA") return LOGO_KVA;
   return nullptr;
 }
 
