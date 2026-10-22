@@ -34,8 +34,8 @@
 // ESP32-C3 SuperMini + 1,3" OLED SH1106: SDA=GPIO8, SCL=GPIO9.
 static constexpr uint8_t OLED_SDA = 8;
 static constexpr uint8_t OLED_SCL = 9;
-// Bzučák ověřený jako tónový/PWM: signál GPIO4, druhý vodič GND.
-static constexpr uint8_t BUZZER_PIN = 4;
+// PCB rev. A vede PWM bzučáku na GPIO3; druhý vodič je GND.
+static constexpr uint8_t BUZZER_PIN = 3;
 static constexpr uint8_t BUZZER_CHANNEL = 0;
 static constexpr uint16_t BUZZER_QUARTER_MS = 250;
 static constexpr uint8_t BUZZER_GAP_PERCENT = 8;

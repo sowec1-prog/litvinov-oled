@@ -30,10 +30,15 @@ Všechny moduly musí mít společnou zem (**GND**). OLED i GPIO ESP32-C3 jsou 3
 | GPIO9 | OLED SCL | I²C hodiny |
 | 3V3 | OLED VCC | napájení OLED |
 | GND | OLED GND | společná zem |
-| GPIO4 | piezo `+` / signál | PWM znělka |
+| GPIO3 | piezo `+` / signál | PWM znělka — opravené zapojení PCB rev. A |
 | GND | piezo `-` | společná zem |
+| GPIO2 | ADC_BAT z děliče 100 kΩ / 100 kΩ | pouze připravený vstup měření baterie; firmware jej zatím nečte |
 
 OLED používá I²C adresu `0x3C`.
+
+### Oprava osazené PCB rev. A
+
+Deska byla vyrobena s posunem dvou signálů proti původnímu návrhu: PWM bzučáku je na **GPIO3** (ne GPIO4) a uzel `ADC_BAT` děliče 100 kΩ / 100 kΩ vede na **GPIO2** (ne GPIO3). Firmware v této revizi používá GPIO3 pro bzučák; měření baterie zatím není implementované a GPIO2 proto nepoužívá. GPIO2 je bootovací pin ESP32-C3, takže před budoucím zapnutím měření baterie musí proběhnout fyzický boot test s osazeným děličem. `B+` článku se nikdy nesmí připojit přímo na GPIO.
 
 ## Doporučené vylepšení Wi-Fi antény
 
